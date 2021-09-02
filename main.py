@@ -6,6 +6,7 @@ import pygame as pg
 
 import utils
 from map import Map
+import argparse
 
 
 class DrawMode(Enum):
@@ -120,7 +121,7 @@ def mouse_down(btn, pos, palette, tilemap, translation):
                     CONFIG["selected_img"] = key
                     break
         elif CONFIG["draw_mode"] != DrawMode.NONE:
-            loc = *world_mouse_pos(translation, *pos), 0
+            loc = world_mouse_pos(translation, *pos)
             if CONFIG["draw_mode"] == DrawMode.PEN:
                 tilemap[loc] = CONFIG["selected_img"]
             elif CONFIG["draw_mode"] == DrawMode.ERASE and loc in tilemap:
@@ -169,6 +170,10 @@ def draw_cursor(sc, x, y):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", type=str, help="Output file for the map")
+    parser.add_argument("-i", type=str, help="Input file for the map (optional)", metavar="input")
+    args = parser.parse_args()
     pg.init()
     pg.mouse.set_visible(False)
     sc = pg.display.set_mode(SIZE)
@@ -176,7 +181,7 @@ def main():
     PALETTE = {d[0]: (pg.transform.scale(d[1], (20, 20)), pg.Rect(WIDTH / 18, index * 24 + 32, 20, 20)) for index, d in
                enumerate(utils.load_image_dir("imgs").items())}
     CONFIG["selected_img"] = list(PALETTE.keys())[0]
-    MAP = Map("map")
+    MAP = Map(args.output, args.i)
     translation = [0, 0]
     movement = [0, 0]
     while True:

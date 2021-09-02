@@ -18,7 +18,7 @@ def parse_map_key(key: str):
 
 
 def read_map(fn: str):
-    path = f"./{fn}.json"
+    path = f"./{fn}"
     if os.path.exists(path):
         with open(path, "r+") as file:
             data = file.read()
@@ -30,5 +30,5 @@ def read_map(fn: str):
 
 
 def write_map(tilemap):
-    with open(f"./{tilemap.fn}.json", "w") as file:
+    with open(f"./{tilemap.fn}", "w") as file:
         file.write(json.dumps(tilemap))
