@@ -11,18 +11,18 @@ from map import Map
 
 # ----------------------------------------------------------- Constants etc
 class DrawMode(Enum):
-    PEN = 0
-    ERASE = 1
-    FILL = 2
-    NONE = 3
+    PEN = "pen"
+    ERASE = "erase"
+    FILL = "fill"
+    NONE = "none"
 
 
 COLORS = {
-    "TEAL": "#4a7a96",
-    "BLUE": "#333f58",
-    "BLACK": "#292831",
-    "PINK": "#ee8695",
-    "PEACH": "#fbbbad"
+    "TEAL": (74,122,150),
+    "BLUE": (51,63,88),
+    "BLACK": (41,40,49),
+    "PINK": (238,134,149),
+    "PEACH": (251,187,173)
 }
 
 CONFIG = {
@@ -82,7 +82,7 @@ def swap_image(key, palette):
 
 
 def world_mouse_pos(translation, screen_x, screen_y):
-    return math.floor((screen_x - SIDEBAR_WIDTH - translation[0]) / CONFIG["scale"]), math.floor(
+    return math.floor((max(screen_x - SIDEBAR_WIDTH, 0) - translation[0]) / CONFIG["scale"]), math.floor(
         (screen_y - translation[1]) / CONFIG["scale"]), CONFIG["curr_layer"]
 
 
@@ -149,17 +149,22 @@ def handle_event(evt, palette, tilemap):
 
 
 # ----------------------------------------------------------- Rendering funcs
-def draw_sidebar(palette, screen):
-    pg.draw.rect(screen, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
-    pg.draw.rect(screen, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
+def draw_sidebar(palette, surf, font, wmx, wmy):
+    pg.draw.rect(surf, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
+    pg.draw.rect(surf, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     for name, i in palette.items():
-        screen.blit(pg.transform.scale(i[0], (20, 20)), i[1])
+        surf.blit(pg.transform.scale(i[0], (20, 20)), i[1])
         if CONFIG["selected_img"] == name:
-            pg.draw.rect(screen, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
+            pg.draw.rect(surf, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
+    text_blit(surf, font, f"{wmx},{wmy}\nLayer: {CONFIG['curr_layer']}\nMode: {CONFIG['draw_mode'].value}",
+              (20, HEIGHT - 50), COLORS["PINK"])
 
 
 def draw_map(tilemap, surface, palette, translation):
-    for k, v in sorted(tilemap.items(), reverse=True):
+    surface.fill(COLORS["BLACK"])
+    lst = sorted(sorted(tilemap.items(), key=lambda i: utils.parse_map_key(i[0])[2], reverse=True),
+                 key=lambda j: utils.parse_map_key(j[0])[2] == CONFIG["curr_layer"])
+    for k, v in lst:
         loc = utils.parse_map_key(k)
         rect = pg.Rect(int(loc[0]) * CONFIG["scale"], int(loc[1]) * CONFIG["scale"],
                        CONFIG["scale"], CONFIG["scale"])
@@ -175,11 +180,9 @@ def draw_map(tilemap, surface, palette, translation):
                     img.set_alpha(255)
                 else:
                     img.set_alpha(128)
+                    if surface.get_at((rect.x, rect.y)) != COLORS["BLACK"]:
+                        pg.draw.rect(surface, COLORS["BLACK"], rect)
                 surface.blit(img, rect)
-        else:
-            print(f"Image '{v}' not found in palette.")
-            if CONFIG["remove_tiles_not_in_palette"]:
-                del tilemap[loc]
 
 
 def draw_cursor(sc, x, y):
@@ -191,6 +194,15 @@ def draw_cursor(sc, x, y):
     pg.draw.line(sc, color, (x + length, y), (x + gap, y), width=width)
     pg.draw.line(sc, color, (x, y - length), (x, y - gap), width=width)
     pg.draw.line(sc, color, (x, y + length), (x, y + gap), width=width)
+
+
+def text_blit(surface, font, text, pos, color):
+    lines = text.split("\n")
+    px, py = pos
+    for ln in lines:
+        s = font.render(ln, True, color)
+        surface.blit(s, (px, py, *s.get_size()))
+        py += s.get_size()[1]
 
 
 def main():
@@ -205,6 +217,7 @@ def main():
     pg.mouse.set_visible(False)
     screen = pg.display.set_mode(SIZE)
     pg.display.set_caption("Tile Map Editor")
+    font = pg.font.Font(pg.font.get_default_font(), 12)
 
     # ----------------------------------------------------------- Setup surfaces for rendering
     sidebar_surf = pg.Surface(SIDEBAR_SIZE)
@@ -239,13 +252,13 @@ def main():
         move(translation)  # Change translation based on input (if any)
 
         # ----------------------------------------------------------- Draw onto screen
-        map_surf.fill(COLORS["BLACK"])
-
+        mouse_pos = mx, my = pg.mouse.get_pos()
+        world_pos = wmx, wmy, wmz = world_mouse_pos(translation, *mouse_pos)
         draw_map(TILEMAP, map_surf, PALETTE, translation)
-        draw_sidebar(PALETTE, sidebar_surf)
+        draw_sidebar(PALETTE, sidebar_surf, font, wmx, wmy)
         screen.blit(map_surf, map_surf_rect)
         screen.blit(sidebar_surf, sidebar_surf_rect)
-        draw_cursor(screen, *pg.mouse.get_pos())
+        draw_cursor(screen, *mouse_pos)
         pg.display.flip()
 
 
