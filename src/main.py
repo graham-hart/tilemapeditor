@@ -9,6 +9,7 @@ import utils
 from map import Map
 
 
+# ----------------------------------------------------------- Constants etc
 class DrawMode(Enum):
     PEN = 0
     ERASE = 1
@@ -45,32 +46,32 @@ CONTROLS = {
     "save": [pg.K_g],
     "no_draw": [pg.K_n],
     "zoom_in": [pg.K_EQUALS],
-    "zoom_out": [pg.K_MINUS]
+    "zoom_out": [pg.K_MINUS],
+    "layer_up": [pg.K_RIGHTBRACKET],
+    "layer_down": [pg.K_LEFTBRACKET],
 }
 SIZE = WIDTH, HEIGHT = 1600, 900
 SIDEBAR_SIZE = SIDEBAR_WIDTH, SIDEBAR_HEIGHT = WIDTH / 4, HEIGHT
 MAP_SIZE = MAP_WIDTH, MAP_HEIGHT = WIDTH - SIDEBAR_WIDTH, HEIGHT
 
 
-def exit(tilemap):
+# Run when exiting editor
+def exit_pg(tilemap):
     if CONFIG["save_on_exit"]:
         tilemap.save()
     sys.exit()
 
 
-def world_mouse_pos(translation, screen_x, screen_y):
-    return math.floor((screen_x - SIDEBAR_WIDTH - translation[0]) / CONFIG["scale"]), math.floor(
-        (screen_y - translation[1]) / CONFIG["scale"])
+# Remove tiles with no image from map
+def sanitize_map(tilemap, palette):
+    for k, v in sorted(tilemap.items(), reverse=True):
+        if v not in palette.keys():
+            pos = utils.parse_map_key(k)
+            if CONFIG["remove_tiles_not_in_palette"]:
+                del tilemap[pos]
 
 
-def draw_sidebar(palette, screen):
-    pg.draw.rect(screen, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
-    pg.draw.rect(screen, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
-    for name, i in palette.items():
-        screen.blit(pg.transform.scale(i[0], (20, 20)), i[1])
-        if CONFIG["selected_img"] == name:
-            pg.draw.rect(screen, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
-
+# ----------------------------------------------------------- Controls-related funcs
 
 def swap_image(key, palette):
     num = pg.key.name(key)
@@ -80,9 +81,14 @@ def swap_image(key, palette):
             CONFIG["selected_img"] = list(palette.keys())[num - 1]
 
 
+def world_mouse_pos(translation, screen_x, screen_y):
+    return math.floor((screen_x - SIDEBAR_WIDTH - translation[0]) / CONFIG["scale"]), math.floor(
+        (screen_y - translation[1]) / CONFIG["scale"]), CONFIG["curr_layer"]
+
+
 def key_down(key, tilemap, palette):
     if key in CONTROLS["exit"]:
-        exit(tilemap)
+        exit_pg(tilemap)
     elif key in CONTROLS["save"]:
         tilemap.save()
     elif key in CONTROLS["erase"]:
@@ -95,6 +101,10 @@ def key_down(key, tilemap, palette):
         CONFIG["scale"] += 2
     elif key in CONTROLS["zoom_out"] and CONFIG["scale"] > 2:
         CONFIG["scale"] -= 2
+    elif key in CONTROLS["layer_down"] and CONFIG["curr_layer"] > 0:
+        CONFIG["curr_layer"] -= 1
+    elif key in CONTROLS["layer_up"] and CONFIG["curr_layer"] < 10:
+        CONFIG["curr_layer"] += 1
     else:
         swap_image(key, palette)
 
@@ -107,53 +117,6 @@ def mouse_down(btn, pos, palette):
                 if img[1].x <= x <= img[1].x + img[1].width and img[1].y <= y <= img[1].y + img[1].height:
                     CONFIG["selected_img"] = key
                     break
-
-
-def handle_event(evt, palette, tilemap):
-    if evt.type == pg.QUIT:
-        exit(tilemap)
-    elif evt.type == pg.KEYDOWN:
-        key_down(evt.key, tilemap, palette)
-    elif evt.type == pg.MOUSEBUTTONDOWN:
-        mouse_down(evt.button, evt.pos, palette)
-
-
-def draw_map(tilemap, surface, palette, translation):
-    for k, v in sorted(tilemap.items(), reverse=True):
-        pos = utils.parse_map_key(k)
-        rect = pg.Rect(int(pos[0]) * CONFIG["scale"], int(pos[1]) * CONFIG["scale"],
-                       CONFIG["scale"], CONFIG["scale"])
-        img = palette[v][0]
-        if CONFIG["scale"] != 1:
-            img = pg.transform.scale(img, (CONFIG["scale"], CONFIG["scale"]))
-        rect.move_ip(translation)
-        rect.inflate(CONFIG["scale"], CONFIG["scale"])
-        if v in palette.keys():
-            if -rect.width <= rect.x <= MAP_WIDTH and -rect.height <= rect.y <= MAP_HEIGHT:
-                surface.blit(img, rect)
-        else:
-            print(f"Image '{v}' not found in palette.")
-            if CONFIG["remove_tiles_not_in_palette"]:
-                del tilemap[pos]
-
-
-def draw_cursor(sc, x, y):
-    length = 10
-    width = 3
-    gap = 5
-    color = COLORS["PINK"]
-    pg.draw.line(sc, color, (x - length, y), (x - gap, y), width=width)
-    pg.draw.line(sc, color, (x + length, y), (x + gap, y), width=width)
-    pg.draw.line(sc, color, (x, y - length), (x, y - gap), width=width)
-    pg.draw.line(sc, color, (x, y + length), (x, y + gap), width=width)
-
-
-def sanitize_map(tilemap, palette):
-    for k, v in sorted(tilemap.items(), reverse=True):
-        if v not in palette.keys():
-            pos = utils.parse_map_key(k)
-            if CONFIG["remove_tiles_not_in_palette"]:
-                del tilemap[pos]
 
 
 def key_pressed_in_list(lst):
@@ -173,6 +136,61 @@ def move(translation):
         translation[0] += CONFIG["move_speed"]
     if key_pressed_in_list(CONTROLS["move_right"]):
         translation[0] -= CONFIG["move_speed"]
+
+
+# ----------------------------------------------------------- Events
+def handle_event(evt, palette, tilemap):
+    if evt.type == pg.QUIT:
+        exit_pg(tilemap)
+    elif evt.type == pg.KEYDOWN:
+        key_down(evt.key, tilemap, palette)
+    elif evt.type == pg.MOUSEBUTTONDOWN:
+        mouse_down(evt.button, evt.pos, palette)
+
+
+# ----------------------------------------------------------- Rendering funcs
+def draw_sidebar(palette, screen):
+    pg.draw.rect(screen, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
+    pg.draw.rect(screen, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
+    for name, i in palette.items():
+        screen.blit(pg.transform.scale(i[0], (20, 20)), i[1])
+        if CONFIG["selected_img"] == name:
+            pg.draw.rect(screen, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
+
+
+def draw_map(tilemap, surface, palette, translation):
+    for k, v in sorted(tilemap.items(), reverse=True):
+        loc = utils.parse_map_key(k)
+        rect = pg.Rect(int(loc[0]) * CONFIG["scale"], int(loc[1]) * CONFIG["scale"],
+                       CONFIG["scale"], CONFIG["scale"])
+        img = palette[v][0]
+        if CONFIG["scale"] != 1:
+            img = pg.transform.scale(img, (CONFIG["scale"], CONFIG["scale"]))
+        rect.move_ip(translation)
+        rect.inflate(CONFIG["scale"], CONFIG["scale"])
+        if v in palette.keys():
+            if -rect.width <= rect.x <= MAP_WIDTH and -rect.height <= rect.y <= MAP_HEIGHT:
+                # TODO: MAKE THIS ACTUALLY EFFICIENT
+                if loc[2] == CONFIG["curr_layer"]:
+                    img.set_alpha(255)
+                else:
+                    img.set_alpha(128)
+                surface.blit(img, rect)
+        else:
+            print(f"Image '{v}' not found in palette.")
+            if CONFIG["remove_tiles_not_in_palette"]:
+                del tilemap[loc]
+
+
+def draw_cursor(sc, x, y):
+    length = 10
+    width = 3
+    gap = 5
+    color = COLORS["PINK"]
+    pg.draw.line(sc, color, (x - length, y), (x - gap, y), width=width)
+    pg.draw.line(sc, color, (x + length, y), (x + gap, y), width=width)
+    pg.draw.line(sc, color, (x, y - length), (x, y - gap), width=width)
+    pg.draw.line(sc, color, (x, y + length), (x, y + gap), width=width)
 
 
 def main():

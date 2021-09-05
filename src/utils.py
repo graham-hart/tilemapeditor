@@ -9,12 +9,12 @@ def load_image_dir(directory):
     d = os.fsencode(directory)
     for i, file in enumerate(os.listdir(d)):
         fn = os.fsdecode(file)
-        imgs[os.path.splitext(fn)[0]] = pg.image.load(f"./{directory}/{fn}").convert()
+        imgs[os.path.splitext(fn)[0]] = pg.image.load(f"./{directory}/{fn}").convert_alpha()
     return imgs
 
 
 def parse_map_key(key: str):
-    return tuple(key.split(","))
+    return tuple(int(i) for i in key.split(","))
 
 
 def read_map(fn: str):

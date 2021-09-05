@@ -11,7 +11,7 @@ class Map(dict):
 
     @staticmethod
     def format_key(key: tuple):
-        return f"{int(key[0])},{int(key[1])}"
+        return f"{int(key[0])},{int(key[1])},{int(key[2])}"
 
     def __getitem__(self, key: tuple):
         return super().__getitem__(Map.format_key(key))
