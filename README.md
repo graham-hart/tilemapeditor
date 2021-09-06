@@ -35,3 +35,7 @@ Input source images into the "./imgs" folder. These images MUST have unique name
 > Layer up: ]
 > 
 > Layer down: [
+> 
+> Increase pen size: .
+> 
+> Decrease pen size: ,
