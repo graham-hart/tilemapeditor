@@ -156,15 +156,15 @@ def handle_event(evt, palette, tilemap):
 
 
 # ----------------------------------------------------------- Rendering funcs
-def draw_sidebar(palette, surf, font, wmx, wmy):
+def draw_sidebar(palette, surf, font, wmx, wmy, fps):
     pg.draw.rect(surf, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     pg.draw.rect(surf, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     for name, i in palette.items():
         surf.blit(pg.transform.scale(i[0], (20, 20)), i[1])
         if SETTINGS["selected_img"] == name:
             pg.draw.rect(surf, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
-    text_blit(surf, font, f"{wmx},{wmy}\nLayer: {SETTINGS['curr_layer']}\nMode: {SETTINGS['draw_mode'].value}\nPen size: {SETTINGS['pen_size']}",
-              (20, HEIGHT - 80), COLORS["PINK"])
+    text_blit(surf, font, f"{wmx},{wmy}\nLayer: {SETTINGS['curr_layer']}\nMode: {SETTINGS['draw_mode'].value}\nPen size: {SETTINGS['pen_size']}\nFPS: {math.floor(fps)}",
+              (20, HEIGHT - 120), COLORS["PINK"])
 
 
 def draw_map(tilemap, surface, palette, translation):
@@ -186,8 +186,12 @@ def draw_map(tilemap, surface, palette, translation):
                     img.set_alpha(255)
                 else:
                     img.set_alpha(128)
-                    if surface.get_at((rect.x, rect.y)) != COLORS["BLACK"]:
-                        pg.draw.rect(surface, COLORS["BLACK"], rect)
+                    try:
+                        if surface.get_at((utils.clamp(rect.x, 0, MAP_WIDTH-1), utils.clamp(rect.y, 0, HEIGHT-1))) != COLORS["BLACK"]:
+                            pg.draw.rect(surface, COLORS["BLACK"], rect)
+                    except IndexError:
+                        print(rect)
+                        sys.exit()
                 surface.blit(img, rect)
 
 
@@ -245,6 +249,7 @@ def main():
     screen = pg.display.set_mode(SIZE)
     pg.display.set_caption("Tile Map Editor")
     font = pg.font.Font(pg.font.get_default_font(), 16)
+    clock = pg.time.Clock()
 
     # ----------------------------------------------------------- Setup surfaces for rendering
     sidebar_surf = pg.Surface(SIDEBAR_SIZE)
@@ -272,11 +277,12 @@ def main():
         mouse_pos = mx, my = pg.mouse.get_pos()
         world_pos = wmx, wmy, wmz = world_mouse_pos(translation, *mouse_pos)
         draw_map(TILEMAP, map_surf, PALETTE, translation)
-        draw_sidebar(PALETTE, sidebar_surf, font, wmx, wmy)
+        draw_sidebar(PALETTE, sidebar_surf, font, wmx, wmy, clock.get_fps())
         screen.blit(map_surf, map_surf_rect)
         screen.blit(sidebar_surf, sidebar_surf_rect)
         draw_cursor(screen, *mouse_pos)
         pg.display.flip()
+        clock.tick()
 
 
 if __name__ == "__main__":

@@ -29,6 +29,10 @@ def read_map(fn: str):
         return {}
 
 
+def clamp(inp, mn, mx):
+    return max(min(inp, mx), mn)
+
+
 def write_map(tilemap):
     with open(f"./{tilemap.fn}", "w") as file:
         file.write(json.dumps(tilemap))
