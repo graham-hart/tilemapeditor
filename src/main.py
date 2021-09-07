@@ -213,6 +213,15 @@ def text_blit(surface, font, text, pos, color):
         s = font.render(ln, True, color)
         surface.blit(s, (px, py, *s.get_size()))
         py += s.get_size()[1]
+# ----------------------------------------------------------- Map Editing
+def pen_size_draw(mode, radius, loc, tilemap):
+    wmx, wmy, wmz = loc
+    for x in range(wmx - radius, wmx + radius):
+        for y in range(wmy - radius, wmy + radius):
+            if mode == DrawMode.PEN:
+                tilemap[x, y, wmz] = SETTINGS["selected_tile"]
+            elif mode == DrawMode.ERASE and (x, y, wmz) in tilemap:
+                del tilemap[x, y, wmz]
 
 
 def paint(translation, tilemap):
@@ -221,23 +230,14 @@ def paint(translation, tilemap):
             pos = pg.mouse.get_pos()
             if pos[0] > SIDEBAR_WIDTH:
                 loc = wmx, wmy, wmz = world_mouse_pos(translation, *pos)
-                radius = math.floor(SETTINGS["pen_size"] / 2)
-                if radius:
-                    for x in range(wmx - radius, wmx + radius):
-                        for y in range(wmy - radius, wmy + radius):
-                            if SETTINGS["draw_mode"] == DrawMode.PEN:
-                                tilemap[x, y, wmz] = SETTINGS["selected_img"]
-                            elif SETTINGS["draw_mode"] == DrawMode.ERASE and loc in tilemap:
-                                del tilemap[x, y, wmz]
-                else:
-                    if SETTINGS["draw_mode"] == DrawMode.PEN:
-                        tilemap[wmx, wmy, wmz] = SETTINGS["selected_img"]
-                    elif SETTINGS["draw_mode"] == DrawMode.ERASE and loc in tilemap:
-                        del tilemap[wmx, wmy, wmz]
-
+                radius = max(math.floor(SETTINGS["pen_size"] / 2), 1)
+                if SETTINGS["draw_mode"] == DrawMode.PEN:
+                    pen_size_draw(DrawMode.PEN, radius, loc, tilemap)
+                elif SETTINGS["draw_mode"] == DrawMode.ERASE:
+                    pen_size_draw(DrawMode.ERASE, radius, loc, tilemap)
 
 def main():
-    # ----------------------------------------------------------- Parse CLI args for file IO
+    # ----------------------------------------------------------- Parse CL args for file IO
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=str, help="Output file for the map")
     parser.add_argument("-i", type=str, help="Input file for the map (optional)", metavar="input")
@@ -260,7 +260,7 @@ def main():
     # ----------------------------------------------------------- Palette setup
     PALETTE = {d[0]: (pg.transform.scale(d[1], (20, 20)), pg.Rect(WIDTH / 18, index * 24 + 32, 20, 20)) for index, d in
                enumerate(utils.load_image_dir("imgs").items())}
-    SETTINGS["selected_img"] = list(PALETTE.keys())[0]
+    SETTINGS["selected_tile"] = list(PALETTE.keys())[0]
 
     # ----------------------------------------------------------- Map & Translation
     TILEMAP = Map(args.output, args.i)
