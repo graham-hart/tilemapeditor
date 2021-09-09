@@ -27,7 +27,7 @@ COLORS = {
 
 SETTINGS = {
     "draw_mode": DrawMode.PEN,
-    "selected_img": "",
+    "selected_tile": "",
     "save_on_exit": False,
     "remove_tiles_not_in_palette": True,
     "move_speed": 3,
@@ -81,7 +81,7 @@ def swap_image(key, palette):
     if num.isdigit():
         num = int(num)
         if len(palette.keys()) >= num:
-            SETTINGS["selected_img"] = list(palette.keys())[num - 1]
+            SETTINGS["selected_tile"] = list(palette.keys())[num - 1]
 
 
 def world_mouse_pos(translation, screen_x, screen_y):
@@ -122,7 +122,7 @@ def mouse_down(btn, pos, palette):
         if x <= SIDEBAR_WIDTH:
             for key, img in palette.items():
                 if img[1].x <= x <= img[1].x + img[1].width and img[1].y <= y <= img[1].y + img[1].height:
-                    SETTINGS["selected_img"] = key
+                    SETTINGS["selected_tile"] = key
                     break
 
 
@@ -161,16 +161,17 @@ def draw_sidebar(palette, surf, font, wmx, wmy, fps):
     pg.draw.rect(surf, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     for name, i in palette.items():
         surf.blit(pg.transform.scale(i[0], (20, 20)), i[1])
-        if SETTINGS["selected_img"] == name:
+        if SETTINGS["selected_tile"] == name:
             pg.draw.rect(surf, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
-    text_blit(surf, font, f"{wmx},{wmy}\nLayer: {SETTINGS['curr_layer']}\nMode: {SETTINGS['draw_mode'].value}\nPen size: {SETTINGS['pen_size']}\nFPS: {math.floor(fps)}",
+    text_blit(surf, font,
+              f"{wmx},{wmy}\nLayer: {SETTINGS['curr_layer']}\nMode: {SETTINGS['draw_mode'].value}\nPen size: {SETTINGS['pen_size']}\nFPS: {math.floor(fps)}",
               (20, HEIGHT - 120), COLORS["PINK"])
 
 
 def draw_map(tilemap, surface, palette, translation):
     surface.fill(COLORS["BLACK"])
     for k, v in sorted(sorted(tilemap.items(), key=lambda i: utils.parse_map_key(i[0])[2]),
-                 key=lambda j: utils.parse_map_key(j[0])[2] == SETTINGS["curr_layer"]):
+                       key=lambda j: utils.parse_map_key(j[0])[2] == SETTINGS["curr_layer"]):
         loc = utils.parse_map_key(k)
         rect = pg.Rect(int(loc[0]) * SETTINGS["scale"], int(loc[1]) * SETTINGS["scale"],
                        SETTINGS["scale"], SETTINGS["scale"])
@@ -187,7 +188,9 @@ def draw_map(tilemap, surface, palette, translation):
                 else:
                     img.set_alpha(128)
                     try:
-                        if surface.get_at((utils.clamp(rect.x, 0, MAP_WIDTH-1), utils.clamp(rect.y, 0, HEIGHT-1))) != COLORS["BLACK"]:
+                        if surface.get_at(int(
+                                (utils.clamp(rect.x, 0, MAP_WIDTH - 1)), int(utils.clamp(rect.y, 0, HEIGHT - 1)))) != COLORS[
+                            "BLACK"]:
                             pg.draw.rect(surface, COLORS["BLACK"], rect)
                     except IndexError:
                         print(rect)
@@ -213,15 +216,22 @@ def text_blit(surface, font, text, pos, color):
         s = font.render(ln, True, color)
         surface.blit(s, (px, py, *s.get_size()))
         py += s.get_size()[1]
+
 # ----------------------------------------------------------- Map Editing
 def pen_size_draw(mode, radius, loc, tilemap):
     wmx, wmy, wmz = loc
-    for x in range(wmx - radius, wmx + radius):
-        for y in range(wmy - radius, wmy + radius):
-            if mode == DrawMode.PEN:
-                tilemap[x, y, wmz] = SETTINGS["selected_tile"]
-            elif mode == DrawMode.ERASE and (x, y, wmz) in tilemap:
-                del tilemap[x, y, wmz]
+    if radius:
+        for x in range(wmx - radius, wmx + radius):
+            for y in range(wmy - radius, wmy + radius):
+                if mode == DrawMode.PEN:
+                    tilemap[x, y, wmz] = SETTINGS["selected_tile"]
+                elif mode == DrawMode.ERASE and (x, y, wmz) in tilemap:
+                    del tilemap[x, y, wmz]
+    else:
+        if mode == DrawMode.PEN:
+            tilemap[wmx, wmy, wmz] = SETTINGS["selected_tile"]
+        elif mode == DrawMode.ERASE and (wmx, wmy, wmz) in tilemap:
+            del tilemap[wmx, wmy, wmz]
 
 
 def paint(translation, tilemap):
@@ -230,11 +240,12 @@ def paint(translation, tilemap):
             pos = pg.mouse.get_pos()
             if pos[0] > SIDEBAR_WIDTH:
                 loc = wmx, wmy, wmz = world_mouse_pos(translation, *pos)
-                radius = max(math.floor(SETTINGS["pen_size"] / 2), 1)
+                radius = math.floor(SETTINGS["pen_size"] / 2)
                 if SETTINGS["draw_mode"] == DrawMode.PEN:
                     pen_size_draw(DrawMode.PEN, radius, loc, tilemap)
                 elif SETTINGS["draw_mode"] == DrawMode.ERASE:
                     pen_size_draw(DrawMode.ERASE, radius, loc, tilemap)
+
 
 def main():
     # ----------------------------------------------------------- Parse CL args for file IO
