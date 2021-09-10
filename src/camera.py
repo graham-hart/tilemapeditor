@@ -7,14 +7,13 @@ class Camera:
     def __init__(self, screen_size, viewport_size):
         self.screen_width, self.screen_height = screen_size
         self.v_width, self.v_height = viewport_size
-        self.x = 0
-        self.y = 0
+        self.translation = pg.Vector2()
         self.scale = [self.screen_width / self.v_width, self.screen_height / self.v_height]
 
     def translate(self, x, y):
         if utils.all_num((x, y)):
-            self.x += x
-            self.y += y
+            self.translation.x += x
+            self.translation.y += y
         else:
             raise TypeError("Argument must be either int or float")
 
@@ -38,7 +37,7 @@ class Camera:
     # Take in screen coords and return world coords
     def unproject(self, x, y):
         if utils.all_num((x, y)):
-            return x / self.scale[0] + self.x, y / self.scale[1] + self.y
+            return x / self.scale[0] + self.translation.x, y / self.scale[1] + self.translation.y
         else:
             raise TypeError("Argument must be either int or float.")
 
@@ -51,7 +50,7 @@ class Camera:
     # Take in world coords and return screen coords
     def project(self, x, y):
         if utils.all_num((x, y)):
-            return (x - self.x) * self.scale[0], (y - self.y) * self.scale[1]
+            return (x - self.translation.x) * self.scale[0], (y - self.translation.y) * self.scale[1]
         else:
             raise TypeError("Argument must be either int or float.")
 
@@ -98,3 +97,8 @@ class Camera:
             self.v_height -= y
             print(self.v_width, self.v_height)
             self.update_scale()
+
+    def bounds(self):
+        tl = pg.Vector2(self.translation.x - 1, self.translation.y - 1)
+        br = pg.Vector2(self.translation.x + self.v_width + 1, self.translation.y + self.v_height + 1)
+        return tl, br

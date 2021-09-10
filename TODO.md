@@ -6,5 +6,6 @@
 - Make rendering more efficient (currently very slow)
 - Better image loading system accounting for variations of tiles
 - Make less keybind dependent (make better UI)
-- Add camera (scaling & translation)
-- DONT LOOP THROUGH EVERY FRICKIN TILE EVERY FRAME GRAHAM THATS A BAD IDEA 
+- Add alpha back for multiple layers
+- Fix tile layering
+- Refactor palette 

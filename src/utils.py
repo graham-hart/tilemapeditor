@@ -17,6 +17,10 @@ def parse_map_key(key: str):
     return tuple(int(i) for i in key.split(","))
 
 
+def format_map_key(loc: tuple[int, int]):
+    return f"{loc[0]},{loc[1]}"
+
+
 def read_map(fn: str):
     path = f"./{fn}"
     if os.path.exists(path):
@@ -33,8 +37,8 @@ def clamp(inp, mn, mx):
     return max(min(inp, mx), mn)
 
 
-def write_map(tilemap):
-    with open(f"./{tilemap.fn}", "w") as file:
+def write_map(tilemap, fn):
+    with open(f"./{fn}", "w") as file:
         file.write(json.dumps(tilemap))
 
 

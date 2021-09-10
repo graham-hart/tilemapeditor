@@ -1,4 +1,3 @@
-import argparse
 import math
 import sys
 from enum import Enum
@@ -85,7 +84,7 @@ def swap_image(key, palette):
 
 
 def world_mouse_pos(camera, screen_x, screen_y):
-    p = camera.unproject(screen_x-SIDEBAR_WIDTH, screen_y)
+    p = camera.unproject(screen_x - SIDEBAR_WIDTH, screen_y)
     return math.floor(p[0]), math.floor(p[1]), SETTINGS["curr_layer"]
 
 
@@ -109,7 +108,7 @@ def key_down(key, tilemap, palette, cam):
     elif key in CONTROLS["scale_pen"] and SETTINGS["pen_size"] < 4:
         SETTINGS["pen_size"] += 1
     elif key in CONTROLS["inflate"]:
-        cam.inflate(1,1)
+        cam.inflate(1, 1)
     elif key in CONTROLS["deflate"]:
         cam.inflate(-1, -1)
     else:
@@ -172,32 +171,19 @@ def draw_sidebar(palette, surf, font, wmx, wmy, fps):
 
 def draw_map(tilemap, surface, palette, cam):
     surface.fill(COLORS["BLACK"])
-    for k, v in sorted(sorted(tilemap.items(), key=lambda i: utils.parse_map_key(i[0])[2]),
-                       key=lambda j: utils.parse_map_key(j[0])[2] == SETTINGS["curr_layer"]):
-        wx, wy, wz = loc = utils.parse_map_key(k)
-        rect = cam.project_rect(pg.Rect(wx, wy, 1, 1))
-        img = palette[v][0]
-        s_f = cam.project_dist(1, 1)
-        s = math.ceil(s_f[0]), math.ceil(s_f[1])
-        img = pg.transform.scale(img, s)
-        rect.inflate(*s)
-        if v in palette.keys():
-            if -rect.width <= rect.x <= MAP_WIDTH and -rect.height <= rect.y <= MAP_HEIGHT:
-                # TODO: MAKE THIS ACTUALLY EFFICIENT
-                if loc[2] == SETTINGS["curr_layer"]:
-                    img.set_alpha(255)
-                else:
-                    img.set_alpha(128)
-                    try:
-                        if surface.get_at(int(
-                                (utils.clamp(rect.x, 0, MAP_WIDTH - 1)), int(utils.clamp(rect.y, 0, HEIGHT - 1)))) != \
-                                COLORS[
-                                    "BLACK"]:
-                            pg.draw.rect(surface, COLORS["BLACK"], rect)
-                    except IndexError:
-                        print(rect)
-                        sys.exit()
-                surface.blit(img, rect)
+    top_left, bottom_right = cam.bounds()
+    for x in range(math.floor(top_left.x), math.ceil(bottom_right.x)):
+        for y in range(math.floor(top_left.y), math.ceil(bottom_right.y)):
+            if utils.format_map_key((x, y)) in tilemap.dict:
+                for z, t in sorted(sorted(tilemap.get_layer((x, y)).items(), key=lambda i: i[0]),
+                                   key=lambda i: i[0] == SETTINGS["curr_layer"]):
+                    r = pg.Rect(cam.project_rect((x, y, 1, 1)))
+                    size_f = cam.project_dist(1,1)
+                    size = math.ceil(size_f[0]),math.ceil(size_f[1])
+                    # TODO: Make this better lol
+                    img = pg.transform.scale(palette[t][0], size)
+                    surface.blit(img, r)
+
 
 
 def draw_cursor(sc, x, y):
@@ -227,14 +213,14 @@ def pen_size_draw(mode, radius, loc, tilemap):
         for x in range(wmx - radius, wmx + radius):
             for y in range(wmy - radius, wmy + radius):
                 if mode == DrawMode.PEN:
-                    tilemap[x, y, wmz] = SETTINGS["selected_tile"]
+                    tilemap.set_item((x, y, wmz), SETTINGS["selected_tile"])
                 elif mode == DrawMode.ERASE and (x, y, wmz) in tilemap:
-                    del tilemap[x, y, wmz]
+                    tilemap.del_item((x, y, wmz))
     else:
         if mode == DrawMode.PEN:
-            tilemap[wmx, wmy, wmz] = SETTINGS["selected_tile"]
+            tilemap.set_item((wmx, wmy, wmz), SETTINGS["selected_tile"])
         elif mode == DrawMode.ERASE and (wmx, wmy, wmz) in tilemap:
-            del tilemap[wmx, wmy, wmz]
+            tilemap.del_item((wmx, wmy, wmz))
 
 
 def paint(cam, tilemap):
@@ -244,19 +230,11 @@ def paint(cam, tilemap):
             if pos[0] > SIDEBAR_WIDTH:
                 loc = wmx, wmy, wmz = world_mouse_pos(cam, *pos)
                 radius = math.floor(SETTINGS["pen_size"] / 2)
-                if SETTINGS["draw_mode"] == DrawMode.PEN:
-                    pen_size_draw(DrawMode.PEN, radius, loc, tilemap)
-                elif SETTINGS["draw_mode"] == DrawMode.ERASE:
-                    pen_size_draw(DrawMode.ERASE, radius, loc, tilemap)
+                if SETTINGS["draw_mode"] == DrawMode.PEN or SETTINGS["draw_mode"] == DrawMode.ERASE:
+                    pen_size_draw(SETTINGS["draw_mode"], radius, loc, tilemap)
 
 
 def main():
-    # ----------------------------------------------------------- Parse CL args for file IO
-    parser = argparse.ArgumentParser()
-    parser.add_argument("output", type=str, help="Output file for the map")
-    parser.add_argument("-i", type=str, help="Input file for the map (optional)", metavar="input")
-    args = parser.parse_args()
-
     # ----------------------------------------------------------- Basic Pygame Initialization
     pg.init()
     pg.mouse.set_visible(False)
@@ -270,13 +248,13 @@ def main():
     sidebar_surf_rect = sidebar_surf.get_rect()
     map_surf = pg.Surface(MAP_SURF_SIZE)
     map_surf_rect = map_surf.get_rect().move(SIDEBAR_WIDTH, 0)
-    CAM = Camera(MAP_SURF_SIZE, (40,40))
+    CAM = Camera(MAP_SURF_SIZE, (40, 40))
     # ----------------------------------------------------------- Palette setup
     PALETTE = {d[0]: (pg.transform.scale(d[1], (20, 20)), pg.Rect(WIDTH / 18, index * 24 + 32, 20, 20)) for index, d in
                enumerate(utils.load_image_dir("imgs").items())}
     SETTINGS["selected_tile"] = list(PALETTE.keys())[0]
     # ----------------------------------------------------------- Map & Translation
-    TILEMAP = Map(args.output, args.i)
+    TILEMAP = Map("map.json")
     while True:
         # ----------------------------------------------------------- Events
         for evt in pg.event.get():
