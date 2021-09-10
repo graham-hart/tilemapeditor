@@ -36,3 +36,17 @@ def clamp(inp, mn, mx):
 def write_map(tilemap):
     with open(f"./{tilemap.fn}", "w") as file:
         file.write(json.dumps(tilemap))
+
+
+def type_all(l, t):
+    for i in l:
+        if type(i) != t:
+            return False
+    return True
+
+
+def all_num(l):
+    for i in l:
+        if type(i) != int and type(i) != float:
+            return False
+    return True
