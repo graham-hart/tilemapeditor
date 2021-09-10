@@ -7,9 +7,10 @@ import pygame as pg
 import utils
 from camera import Camera
 from map import Map
-
-
 # ----------------------------------------------------------- Constants etc
+from palette import Palette
+
+
 class DrawMode(Enum):
     PEN = "pen"
     ERASE = "erase"
@@ -27,12 +28,11 @@ COLORS = {
 
 SETTINGS = {
     "draw_mode": DrawMode.PEN,
-    "selected_tile": "",
     "save_on_exit": False,
     "remove_tiles_not_in_palette": True,
     "move_speed": 0.1,
     "curr_layer": 0,
-    "pen_size": 2,
+    "pen_size": 1,
 }
 
 CONTROLS = {
@@ -80,7 +80,7 @@ def swap_image(key, palette):
     if num.isdigit():
         num = int(num)
         if len(palette.keys()) >= num:
-            SETTINGS["selected_tile"] = list(palette.keys())[num - 1]
+            palette.current = list(palette.keys())[num - 1]
 
 
 def world_mouse_pos(camera, screen_x, screen_y):
@@ -109,8 +109,11 @@ def key_down(key, tilemap, palette, cam):
         SETTINGS["pen_size"] += 1
     elif key in CONTROLS["inflate"]:
         cam.inflate(1, 1)
+        palette.scale_imgs(cam)
     elif key in CONTROLS["deflate"]:
         cam.inflate(-1, -1)
+        palette.scale_imgs(cam)
+
     else:
         swap_image(key, palette)
 
@@ -121,7 +124,7 @@ def mouse_down(btn, pos, palette):
         if x <= SIDEBAR_WIDTH:
             for key, img in palette.items():
                 if img[1].x <= x <= img[1].x + img[1].width and img[1].y <= y <= img[1].y + img[1].height:
-                    SETTINGS["selected_tile"] = key
+                    palette.current = key
                     break
 
 
@@ -161,9 +164,9 @@ def draw_sidebar(palette, surf, font, wmx, wmy, fps):
     pg.draw.rect(surf, COLORS["TEAL"], ((0, 0), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     pg.draw.rect(surf, COLORS["BLUE"], ((0, SIDEBAR_HEIGHT / 2), (SIDEBAR_WIDTH, SIDEBAR_HEIGHT / 2)))
     for name, i in palette.items():
-        surf.blit(pg.transform.scale(i[0], (20, 20)), i[1])
-        if SETTINGS["selected_tile"] == name:
-            pg.draw.rect(surf, COLORS["PEACH"], i[1].inflate(4, 4), width=4, border_radius=2)
+        surf.blit(i["palette_img"], i["palette_rect"])
+        if palette.current == name:
+            pg.draw.rect(surf, COLORS["PEACH"], i["palette_rect"].inflate(6, 6), width=4, border_radius=2)
     text_blit(surf, font,
               f"{wmx},{wmy}\nLayer: {SETTINGS['curr_layer']}\nMode: {SETTINGS['draw_mode'].value}\nPen size: {SETTINGS['pen_size']}\nFPS: {math.floor(fps)}",
               (20, HEIGHT - 120), COLORS["PINK"])
@@ -178,12 +181,7 @@ def draw_map(tilemap, surface, palette, cam):
                 for z, t in sorted(sorted(tilemap.get_layer((x, y)).items(), key=lambda i: i[0]),
                                    key=lambda i: i[0] == SETTINGS["curr_layer"]):
                     r = pg.Rect(cam.project_rect((x, y, 1, 1)))
-                    size_f = cam.project_dist(1,1)
-                    size = math.ceil(size_f[0]),math.ceil(size_f[1])
-                    # TODO: Make this better lol
-                    img = pg.transform.scale(palette[t][0], size)
-                    surface.blit(img, r)
-
+                    surface.blit(palette.get_img(t)["map_img"], r)
 
 
 def draw_cursor(sc, x, y):
@@ -207,23 +205,23 @@ def text_blit(surface, font, text, pos, color):
 
 
 # ----------------------------------------------------------- Map Editing
-def pen_size_draw(mode, radius, loc, tilemap):
+def pen_size_draw(mode, radius, loc, tilemap, palette):
     wmx, wmy, wmz = loc
     if radius:
         for x in range(wmx - radius, wmx + radius):
             for y in range(wmy - radius, wmy + radius):
                 if mode == DrawMode.PEN:
-                    tilemap.set_item((x, y, wmz), SETTINGS["selected_tile"])
+                    tilemap.set_item((x, y, wmz), palette.current)
                 elif mode == DrawMode.ERASE and (x, y, wmz) in tilemap:
                     tilemap.del_item((x, y, wmz))
     else:
         if mode == DrawMode.PEN:
-            tilemap.set_item((wmx, wmy, wmz), SETTINGS["selected_tile"])
+            tilemap.set_item((wmx, wmy, wmz), palette.current)
         elif mode == DrawMode.ERASE and (wmx, wmy, wmz) in tilemap:
             tilemap.del_item((wmx, wmy, wmz))
 
 
-def paint(cam, tilemap):
+def paint(cam, tilemap, palette):
     if pg.mouse.get_pressed(3)[pg.BUTTON_LEFT - 1]:
         if SETTINGS["draw_mode"] != DrawMode.NONE:
             pos = pg.mouse.get_pos()
@@ -231,7 +229,7 @@ def paint(cam, tilemap):
                 loc = wmx, wmy, wmz = world_mouse_pos(cam, *pos)
                 radius = math.floor(SETTINGS["pen_size"] / 2)
                 if SETTINGS["draw_mode"] == DrawMode.PEN or SETTINGS["draw_mode"] == DrawMode.ERASE:
-                    pen_size_draw(SETTINGS["draw_mode"], radius, loc, tilemap)
+                    pen_size_draw(SETTINGS["draw_mode"], radius, loc, tilemap, palette)
 
 
 def main():
@@ -243,24 +241,31 @@ def main():
     font = pg.font.Font(pg.font.get_default_font(), 16)
     clock = pg.time.Clock()
 
-    # ----------------------------------------------------------- Setup surfaces for rendering
+    # ----------------------------------------------------------- Setup surfaces & camera for rendering
     sidebar_surf = pg.Surface(SIDEBAR_SURF_SIZE)
     sidebar_surf_rect = sidebar_surf.get_rect()
     map_surf = pg.Surface(MAP_SURF_SIZE)
     map_surf_rect = map_surf.get_rect().move(SIDEBAR_WIDTH, 0)
+
     CAM = Camera(MAP_SURF_SIZE, (40, 40))
+
     # ----------------------------------------------------------- Palette setup
-    PALETTE = {d[0]: (pg.transform.scale(d[1], (20, 20)), pg.Rect(WIDTH / 18, index * 24 + 32, 20, 20)) for index, d in
-               enumerate(utils.load_image_dir("imgs").items())}
-    SETTINGS["selected_tile"] = list(PALETTE.keys())[0]
+    PALETTE = Palette()
+    imgs = utils.load_image_dir("imgs")
+    for n, i in imgs.items():
+        PALETTE.add_img(n, i)
+    del imgs
+    PALETTE.scale_imgs(CAM)
+
     # ----------------------------------------------------------- Map & Translation
     TILEMAP = Map("map.json")
     while True:
+
         # ----------------------------------------------------------- Events
         for evt in pg.event.get():
             handle_event(evt, PALETTE, TILEMAP, CAM)
         pg.event.clear()
-        paint(CAM, TILEMAP)  # Paint on map if left mb pressed
+        paint(CAM, TILEMAP, PALETTE)  # Paint on map if left mb pressed
         move(CAM)  # Change translation based on input (if any)
 
         # ----------------------------------------------------------- Draw onto screen
